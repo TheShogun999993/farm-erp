@@ -1,0 +1,12 @@
+src/
+|-- app/
+|   |-- globals.css
+|   |-- layout.tsx
+|   |-- page.tsx
+|-- components/
+|   |-- Dashboard.tsx
+|   |-- Sidebar.tsx
+|   |-- RecordTreatmentForm.tsx
+|   |-- FarmsPage.tsx
+|-- types/
+    |-- amu.d.ts  (For TypeScript type definitions)
