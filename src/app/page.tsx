@@ -2,28 +2,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-// Step 4.1: Import necessary components from Chart.js and react-chartjs-2
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
-
-// Register the components Chart.js needs to draw a bar chart
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
 
 // --- TYPE DEFINITIONS ---
 interface Farm {
@@ -44,7 +22,7 @@ interface Treatment {
   indication: string;
 }
 
-// --- MAIN PAGE COMPONENT (No changes here) ---
+// --- MAIN PAGE COMPONENT ---
 export default function AmuMonitoringPage() {
   const [activeView, setActiveView] = useState('dashboard');
   const [farms, setFarms] = useState<Farm[]>([]);
@@ -56,7 +34,7 @@ export default function AmuMonitoringPage() {
     const loadedTxs = JSON.parse(localStorage.getItem('amu.txs') || '[]') as Treatment[];
     setFarms(loadedFarms);
     setTreatments(loadedTxs);
-    if (loadedFarms.length > 0) {
+    if (loadedFarms.length > 0 || loadedTxs.length > 0) {
       setLastSync(new Date().toLocaleString());
     }
   }, []);
@@ -96,7 +74,7 @@ export default function AmuMonitoringPage() {
   );
 }
 
-// --- REUSABLE COMPONENTS (No changes here) ---
+// --- REUSABLE COMPONENTS ---
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
   <div
     className={`rounded-xl border border-border-subtle bg-[linear-gradient(180deg,var(--bg-subtle-2),var(--bg-subtle-3))] p-4 ${className}`}
@@ -124,7 +102,7 @@ const FormField = ({ label, children }: { label: string; children: React.ReactNo
     </div>
 );
 
-// --- NAVIGATION COMPONENT (No changes here) ---
+// --- NAVIGATION COMPONENT ---
 const Navigation = ({ activeView, setActiveView }: { activeView: string; setActiveView: (view: string) => void }) => {
   const navItems = ['dashboard', 'farm', 'treatment', 'prescription', 'lab', 'withdrawal'];
   return (
@@ -134,12 +112,8 @@ const Navigation = ({ activeView, setActiveView }: { activeView: string; setActi
           <a
             key={item}
             href={`#${item}`}
-            onClick={(e) => {
-              e.preventDefault();
-              setActiveView(item);
-            }}
-            className={`mb-1.5 block rounded-lg px-3 py-2.5 text-muted transition-colors hover:text-white 
-            ${activeView === item ? 'bg-bg-subtle-1 text-white' : ''}`}
+            onClick={(e) => { e.preventDefault(); setActiveView(item); }}
+            className={`mb-1.5 block rounded-lg px-3 py-2.5 text-muted transition-colors hover:text-white ${activeView === item ? 'bg-bg-subtle-1 text-white' : ''}`}
           >
             {item.charAt(0).toUpperCase() + item.slice(1).replace('-', ' ')}
           </a>
@@ -153,8 +127,7 @@ const Navigation = ({ activeView, setActiveView }: { activeView: string; setActi
   );
 };
 
-
-// --- SECTION COMPONENTS (No changes here) ---
+// --- SECTION COMPONENTS ---
 const Dashboard = ({ farms, treatments, lastSync }: { farms: Farm[], treatments: Treatment[], lastSync: string }) => {
     const totalTx = treatments.length;
     const avgMg = totalTx > 0 ? (treatments.reduce((sum, tx) => sum + (tx.dose || 0), 0) / totalTx).toFixed(2) : '0';
@@ -164,7 +137,7 @@ const Dashboard = ({ farms, treatments, lastSync }: { farms: Farm[], treatments:
                 <h2 className="text-lg font-semibold">Dashboard</h2>
                 <div className="text-sm text-muted">Last sync: {lastSync}</div>
             </div>
-            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Card>
                     <div className="flex items-center justify-between">
                         <div className="text-sm">Total farms</div>
@@ -179,10 +152,6 @@ const Dashboard = ({ farms, treatments, lastSync }: { farms: Farm[], treatments:
                     </div>
                 </Card>
             </div>
-            <Card className="mb-3">
-                <h3 className="mb-2.5 font-semibold">AMU by drug class (sample)</h3>
-                <div className="h-[120px]"><AmuChart treatments={treatments} /></div>
-            </Card>
         </Card>
     );
 };
@@ -229,7 +198,7 @@ const TreatmentForm = ({ farms, onAddTreatment }: { farms: Farm[], onAddTreatmen
         </Card>
     );
 }
-const WithdrawalCalculator = ({}) => {
+const WithdrawalCalculator = () => {
     const [result, setResult] = useState('-');
     const compute = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -261,40 +230,3 @@ const WithdrawalCalculator = ({}) => {
 const Placeholder = ({ title }: { title: string }) => (
     <Card><h2 className="text-lg font-semibold">{title}</h2><p className="mt-2 text-muted">This component is a placeholder.</p></Card>
 );
-
-
-// --- UPDATED CHART COMPONENT ---
-const AmuChart = ({ treatments }: { treatments: Treatment[] }) => {
-  // Step 4.2: Prepare data and options for the Bar component
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-    },
-    scales: {
-      y: { ticks: { color: '#9aa4b2' } },
-      x: { ticks: { color: '#9aa4b2' } },
-    },
-  };
-
-  const productGroups = treatments.reduce((acc, tx) => {
-    const key = tx.product || 'Unknown';
-    acc[key] = (acc[key] || 0) + (tx.dose || 0);
-    return acc;
-  }, {} as Record<string, number>);
-
-  const data = {
-    labels: Object.keys(productGroups),
-    datasets: [
-      {
-        label: 'Total Dose (mg)',
-        data: Object.values(productGroups),
-        backgroundColor: 'rgba(0, 163, 255, 0.7)',
-      },
-    ],
-  };
-
-  // Step 4.3: Render the chart using the <Bar> component
-  return <Bar options={options} data={data} />;
-};
