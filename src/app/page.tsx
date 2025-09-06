@@ -2,350 +2,285 @@
 'use client';
 
 import React, { useState, useEffect, FormEvent } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { LayoutDashboard, Syringe, Fish, FileText, BarChart2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { differenceInDays, addDays, parseISO } from 'date-fns';
 
-// --- TYPE DEFINITIONS ---
+//==============================================================================
+// 1. TYPE DEFINITIONS
+//==============================================================================
 interface Farm {
   id: string;
   name: string;
-  owner: string;
-  species: 'shrimp' | 'tilapia' | 'carp' | 'pangasius';
-  number: number;
-  created: string;
+  species: 'Shrimp' | 'Tilapia' | 'Carp' | 'Pangasius';
+  location: string;
 }
+
 interface Treatment {
   id: string;
   farmId: string;
-  date: string;
+  date: string; // ISO date string: "2025-09-15"
   product: string;
-  dose: number;
-  route: 'feed' | 'bath' | 'injection';
-  duration: number;
-  indication: string;
-}
-interface Prescription {
-  id: string;
-  vet: string;
-  reg: string;
-  txId: string;
-  issued: string;
-}
-interface LabResult {
-  id: string;
-  sample: string;
-  value: number;
-  txId: string;
-  reported: string;
+  dosage: number; // in mg
+  frequency: 'Daily' | 'Once' | 'Weekly';
+  reason: string;
+  vetPrescriptionId?: string;
+  withdrawalDays: number;
 }
 
-// --- MAIN PAGE COMPONENT ---
-export default function AmuMonitoringPage() {
+//==============================================================================
+// 2. MOCK DATA (Simulates a database)
+//==============================================================================
+const MOCK_FARMS: Farm[] = [
+  { id: 'farm-1', name: 'Coastal Aqua Farms', species: 'Shrimp', location: 'Andhra Pradesh' },
+  { id: 'farm-2', name: 'Vembanad Fish Culture', species: 'Tilapia', location: 'Kerala' },
+  { id: 'farm-3', name: 'Mahanadi Carps', species: 'Carp', location: 'Odisha' },
+];
+
+const MOCK_TREATMENTS: Treatment[] = [
+    { id: 'tx-1', farmId: 'farm-1', date: '2025-09-01', product: 'Oxytetracycline 20%', dosage: 150, frequency: 'Daily', reason: 'Vibriosis', withdrawalDays: 28 },
+    { id: 'tx-2', farmId: 'farm-2', date: '2025-08-20', product: 'Aquaflor 50%', dosage: 100, frequency: 'Once', reason: 'Fin Rot', withdrawalDays: 15 },
+    { id: 'tx-3', farmId: 'farm-1', date: '2025-09-10', product: 'Ciprofloxacin', dosage: 120, frequency: 'Daily', reason: 'Gill Disease', withdrawalDays: 21 },
+];
+
+
+//==============================================================================
+// 3. REUSABLE UI COMPONENTS
+//==============================================================================
+
+// KPI Card for the Dashboard
+const KpiCard = ({ title, value, unit }: { title: string; value: string | number; unit?: string }) => (
+  <div className="rounded-xl border border-border bg-card p-5">
+    <p className="mb-2 text-sm text-muted">{title}</p>
+    <div className="flex items-baseline gap-2">
+      <span className="text-3xl font-bold text-foreground">{value}</span>
+      {unit && <span className="text-muted">{unit}</span>}
+    </div>
+  </div>
+);
+
+//==============================================================================
+// 4. SECTION COMPONENTS (The different pages of the app)
+//==============================================================================
+
+// -------------------- Dashboard Section --------------------
+const DashboardSection = ({ farms, treatments }: { farms: Farm[]; treatments: Treatment[] }) => {
+  const now = new Date();
+  const activeAlerts = treatments.filter(tx => {
+    const withdrawalEndDate = addDays(parseISO(tx.date), tx.withdrawalDays);
+    return now < withdrawalEndDate;
+  });
+
+  const treatmentsBySpecies = farms.reduce((acc, farm) => {
+    const count = treatments.filter(tx => tx.farmId === farm.id).length;
+    acc[farm.species] = (acc[farm.species] || 0) + count;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const chartData = Object.entries(treatmentsBySpecies).map(([name, value]) => ({ name, treatments: value }));
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Dashboard</h1>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <KpiCard title="Total Farms Monitored" value={farms.length} />
+        <KpiCard title="Total Treatments Logged" value={treatments.length} />
+        <KpiCard title="Active Withdrawal Alerts" value={activeAlerts.length} />
+        <KpiCard title="Avg. Withdrawal Period" value={treatments.length > 0 ? (treatments.reduce((sum, tx) => sum + tx.withdrawalDays, 0) / treatments.length).toFixed(1) : '0'} unit="days" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-4 text-lg font-semibold">Withdrawal Period Alerts</h2>
+          <div className="max-h-72 space-y-3 overflow-y-auto pr-2">
+            {activeAlerts.length > 0 ? (
+              activeAlerts.map(tx => {
+                const farm = farms.find(f => f.id === tx.farmId);
+                const withdrawalEndDate = addDays(parseISO(tx.date), tx.withdrawalDays);
+                const daysRemaining = differenceInDays(withdrawalEndDate, now);
+                return (
+                  <div key={tx.id} className="flex items-center justify-between rounded-lg bg-background p-3">
+                    <div className="flex items-center gap-3"><AlertTriangle className="text-warning flex-shrink-0" />
+                      <div>
+                        <p className="font-semibold">{farm?.name || 'Unknown Farm'}</p>
+                        <p className="text-sm text-muted">Product: {tx.product}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                       <p className="font-bold text-warning">{daysRemaining} days remaining</p>
+                       <p className="text-xs text-muted">until {withdrawalEndDate.toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="flex h-full items-center justify-center gap-3 text-muted"><ShieldCheck className="text-success" /><p>No active withdrawal periods. All clear!</p></div>
+            )}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5">
+           <h2 className="mb-4 text-lg font-semibold">Treatments by Species</h2>
+           <div className="h-72 w-full">
+            <ResponsiveContainer>
+              <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                <XAxis dataKey="name" stroke="var(--color-muted)" fontSize={12} />
+                <YAxis stroke="var(--color-muted)" fontSize={12} />
+                <Tooltip cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }} contentStyle={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }} />
+                <Bar dataKey="treatments" fill="var(--color-accent)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// -------------------- Record Treatment Form Section --------------------
+const RecordTreatmentFormSection = ({ farms, onSave }: { farms: Farm[]; onSave: (treatment: Omit<Treatment, 'id'>) => void; }) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newTreatment: Omit<Treatment, 'id'> = {
+      farmId: formData.get('farmId') as string,
+      date: formData.get('date') as string,
+      product: formData.get('product') as string,
+      dosage: parseFloat(formData.get('dosage') as string),
+      frequency: formData.get('frequency') as Treatment['frequency'],
+      reason: formData.get('reason') as string,
+      vetPrescriptionId: formData.get('vetPrescriptionId') as string,
+      withdrawalDays: parseInt(formData.get('withdrawalDays') as string, 10),
+    };
+
+    if (!newTreatment.farmId) { alert('Please select a farm.'); return; }
+    onSave(newTreatment);
+    alert('Treatment saved successfully!');
+    e.currentTarget.reset();
+  };
+
+  return (
+    <div className="max-w-4xl">
+      <h1 className="mb-6 text-3xl font-bold">Record New Treatment</h1>
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-border bg-card p-8">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-muted">Farm / Batch *</label>
+            <select name="farmId" required className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent"><option value="">-- Select Farm --</option>{farms.map(farm => (<option key={farm.id} value={farm.id}>{farm.name} ({farm.species})</option>))}</select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-muted">Treatment Date *</label>
+            <input type="date" name="date" required defaultValue={new Date().toISOString().slice(0, 10)} className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent" />
+          </div>
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-muted">Antimicrobial Product (Brand Name) *</label>
+          <input type="text" name="product" placeholder="e.g., Aquaflor 50%" required className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-muted">Dosage (mg) *</label>
+            <input type="number" name="dosage" placeholder="e.g., 100" required className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent" />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-muted">Frequency *</label>
+            <select name="frequency" required className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent"><option>Daily</option><option>Once</option><option>Weekly</option></select>
+          </div>
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-muted">Reason for Use *</label>
+          <input type="text" name="reason" placeholder="e.g., Vibriosis outbreak" required className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent" />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-muted">Veterinary Prescription ID (if applicable)</label>
+          <input type="text" name="vetPrescriptionId" placeholder="e.g., VET-PRES-12345" className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent" />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-muted">Withdrawal Period (Days) *</label>
+          <input type="number" name="withdrawalDays" placeholder="e.g., 21" required className="w-full rounded-lg border border-border bg-background p-3 focus:border-accent focus:ring-accent" />
+        </div>
+        <div className="pt-4">
+          <button type="submit" className="w-full rounded-lg bg-accent px-6 py-3 font-bold text-background transition-colors hover:bg-accent/90">Save Treatment Log</button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// -------------------- Placeholder for other sections --------------------
+const PlaceholderSection = ({ title }: { title: string }) => (
+  <div>
+    <h1 className="text-3xl font-bold">{title}</h1>
+    <div className="mt-8 rounded-xl border-2 border-dashed border-border bg-card p-12 text-center text-muted">
+      <p>This section is under construction.</p>
+      <p className="text-sm">Functionality for {title.toLowerCase()} will be built here.</p>
+    </div>
+  </div>
+);
+
+
+//==============================================================================
+// 5. MAIN APPLICATION CONTROLLER
+// This is the root component for the page.
+//==============================================================================
+export default function Home() {
   const [activeView, setActiveView] = useState('dashboard');
   const [farms, setFarms] = useState<Farm[]>([]);
   const [treatments, setTreatments] = useState<Treatment[]>([]);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [labResults, setLabResults] = useState<LabResult[]>([]);
-  const [lastSync, setLastSync] = useState('never');
 
   // Load data from localStorage on initial render
   useEffect(() => {
-    setFarms(JSON.parse(localStorage.getItem('amu.farms') || '[]'));
-    setTreatments(JSON.parse(localStorage.getItem('amu.txs') || '[]'));
-    setPrescriptions(JSON.parse(localStorage.getItem('amu.prescs') || '[]'));
-    setLabResults(JSON.parse(localStorage.getItem('amu.labs') || '[]'));
-    if (localStorage.getItem('amu.farms')) {
-      setLastSync(new Date().toLocaleString());
-    }
+    const savedFarms = localStorage.getItem('amu_farms');
+    const savedTreatments = localStorage.getItem('amu_treatments');
+    setFarms(savedFarms ? JSON.parse(savedFarms) : MOCK_FARMS);
+    setTreatments(savedTreatments ? JSON.parse(savedTreatments) : MOCK_TREATMENTS);
   }, []);
 
-  // Save data to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem('amu.farms', JSON.stringify(farms));
-    localStorage.setItem('amu.txs', JSON.stringify(treatments));
-    localStorage.setItem('amu.prescs', JSON.stringify(prescriptions));
-    localStorage.setItem('amu.labs', JSON.stringify(labResults));
-    if (farms.length > 0 || treatments.length > 0) {
-      setLastSync(new Date().toLocaleString());
+  // Handler to save a new treatment and update state/localStorage
+  const handleSaveTreatment = (newTreatmentData: Omit<Treatment, 'id'>) => {
+    const newTreatment: Treatment = { id: `tx-${Date.now()}`, ...newTreatmentData };
+    const updatedTreatments = [...treatments, newTreatment];
+    setTreatments(updatedTreatments);
+    localStorage.setItem('amu_treatments', JSON.stringify(updatedTreatments));
+  };
+
+  const renderContent = () => {
+    switch (activeView) {
+      case 'dashboard': return <DashboardSection farms={farms} treatments={treatments} />;
+      case 'recordTreatment': return <RecordTreatmentFormSection farms={farms} onSave={handleSaveTreatment} />;
+      case 'farms': return <PlaceholderSection title="Farms Management" />;
+      case 'prescriptions': return <PlaceholderSection title="Prescriptions" />;
+      case 'analytics': return <PlaceholderSection title="Analytics & Trends" />;
+      default: return <DashboardSection farms={farms} treatments={treatments} />;
     }
-  }, [farms, treatments, prescriptions, labResults]);
-
-
-  const handleAddFarm = (farm: Farm) => {
-    setFarms(prev => [...prev, farm]);
-    alert('Farm saved!');
   };
 
-  const handleAddTreatment = (tx: Treatment) => {
-    setTreatments(prev => [...prev, tx]);
-    alert('Treatment recorded!');
-  };
-  
-  const handleAddPrescription = (p: Prescription) => {
-    setPrescriptions(prev => [...prev, p]);
-    alert('Prescription saved!');
-  };
-
-  const handleAddLabResult = (lab: LabResult) => {
-    setLabResults(prev => [...prev, lab]);
-    alert('Lab result stored!');
-  };
+  // --- Sidebar Navigation Definition ---
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'farms', label: 'Farms', icon: Fish },
+    { id: 'recordTreatment', label: 'Record Treatment', icon: Syringe },
+    { id: 'prescriptions', label: 'Prescriptions', icon: FileText },
+    { id: 'analytics', label: 'Analytics', icon: BarChart2 },
+  ];
 
   return (
-    <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-[320px_1fr]">
-      <Navigation activeView={activeView} setActiveView={setActiveView} />
-      <div className="min-h-[70vh]">
-        {activeView === 'dashboard' && <Dashboard farms={farms} treatments={treatments} lastSync={lastSync} />}
-        {activeView === 'farm' && <FarmForm onSave={handleAddFarm} />}
-        {activeView === 'treatment' && <TreatmentForm farms={farms} onSave={handleAddTreatment} />}
-        {activeView === 'prescription' && <PrescriptionForm treatments={treatments} onSave={handleAddPrescription} />}
-        {activeView === 'lab' && <LabForm treatments={treatments} onSave={handleAddLabResult} />}
-        {activeView === 'withdrawal' && <WithdrawalCalculator />}
-      </div>
+    <div className="flex min-h-screen">
+      {/* Sidebar */}
+      <aside className="fixed left-0 top-0 h-full w-64 border-r border-border bg-background/50 p-4">
+        <div className="mb-8 flex items-center gap-3"><div className="h-10 w-10 rounded-lg bg-accent"></div><h1 className="text-xl font-bold">AMU Platform</h1></div>
+        <nav className="flex flex-col gap-2">
+          {navItems.map((item) => (
+            <button key={item.id} onClick={() => setActiveView(item.id)}
+              className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${activeView === item.id ? 'bg-accent/20 text-accent' : 'text-muted hover:bg-card hover:text-foreground'}`}>
+              <item.icon size={20} /><span className="font-semibold">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Main Content */}
+      <main className="ml-64 flex-1 p-8">
+        {renderContent()}
+      </main>
     </div>
   );
 }
-
-// --- REUSABLE UI COMPONENTS ---
-const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-  <div className={`rounded-xl border border-border-subtle bg-[linear-gradient(180deg,var(--bg-subtle-2),var(--bg-subtle-3))] p-4 ${className}`}>
-    {children}
-  </div>
-);
-const Button = ({ children, onClick, variant = 'primary', type = 'button' }: { children: React.ReactNode; onClick?: () => void; variant?: 'primary' | 'secondary' | 'success'; type?: 'button' | 'submit' }) => {
-    const styles = {
-        primary: 'bg-accent text-[#052033] hover:bg-accent/90',
-        secondary: 'bg-[#253244] text-white hover:bg-[#253244]/90',
-        success: 'bg-[#2d6a4f] text-white hover:bg-[#2d6a4f]/90',
-    };
-    return <button type={type} onClick={onClick} className={`rounded-lg px-4 py-2.5 font-semibold transition-colors ${styles[variant]}`}>{children}</button>
-}
-const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} className="w-full rounded-lg border border-border-subtle bg-transparent p-2.5 text-foreground placeholder:text-muted/50" />
-);
-const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-    <select {...props} className="w-full rounded-lg border border-border-subtle bg-transparent p-2.5 text-foreground" />
-);
-const FormField = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div>
-        <label className="mb-1.5 block text-sm text-muted">{label}</label>
-        {children}
-    </div>
-);
-
-// --- NAVIGATION COMPONENT ---
-const Navigation = ({ activeView, setActiveView }: { activeView: string; setActiveView: (view: string) => void }) => {
-  const navItems = ['dashboard', 'farm', 'treatment', 'prescription', 'lab', 'withdrawal'];
-  return (
-    <nav className="h-fit rounded-xl bg-[linear-gradient(180deg,var(--bg-subtle-2),transparent)] p-4">
-      <div className="mb-4">
-        {navItems.map((item) => (
-          <a
-            key={item}
-            href={`#${item}`}
-            onClick={(e) => { e.preventDefault(); setActiveView(item); }}
-            className={`mb-1.5 block rounded-lg px-3 py-2.5 text-muted transition-colors hover:text-white ${activeView === item ? 'bg-bg-subtle-1 text-white' : ''}`}
-          >
-            {item.charAt(0).toUpperCase() + item.slice(1).replace(' Calc', ' Calculator')}
-          </a>
-        ))}
-      </div>
-    </nav>
-  );
-};
-
-// --- FORM & SECTION COMPONENTS ---
-const Dashboard = ({ farms, treatments, lastSync }: { farms: Farm[], treatments: Treatment[], lastSync: string }) => {
-    const totalTx = treatments.length;
-    const avgMg = totalTx > 0 ? (treatments.reduce((sum, tx) => sum + (tx.dose || 0), 0) / totalTx).toFixed(2) : '0';
-    const recentTreatments = [...treatments].reverse().slice(0, 5);
-
-    return (
-        <Card className="space-y-3">
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Dashboard</h2>
-                <div className="text-sm text-muted">Last sync: {lastSync}</div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Card>
-                    <div className="flex items-center justify-between"><div className="text-sm">Total farms</div><div className="text-xl font-bold">{farms.length}</div></div>
-                    <div className="text-sm">Total treatments recorded: {totalTx}</div>
-                </Card>
-                <Card>
-                    <div className="flex items-center justify-between"><div className="text-sm">Avg mg active / kg biomass</div><div className="text-xl font-bold">{avgMg}</div></div>
-                </Card>
-            </div>
-            <Card>
-                <h3 className="mb-2.5 font-semibold">Recent Treatments</h3>
-                {recentTreatments.length > 0 ? (
-                    <ul className="space-y-2 text-sm">
-                        {recentTreatments.map(tx => (
-                            <li key={tx.id}>
-                                <span className="font-semibold text-white">{(farms.find(f => f.id === tx.farmId)?.name) || 'Unknown Farm'}:</span>
-                                <span className="text-muted"> {tx.product} on {tx.date}</span>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <div className="text-sm text-muted">No data yet</div>
-                )}
-            </Card>
-        </Card>
-    );
-};
-
-const FarmForm = ({ onSave }: { onSave: (farm: Farm) => void }) => {
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const newFarm: Farm = {
-            id: `farm-${Date.now()}`,
-            name: formData.get('farm-name') as string,
-            owner: formData.get('farm-owner') as string,
-            species: formData.get('farm-species') as Farm['species'],
-            number: parseInt(formData.get('farm-number') as string, 10),
-            created: new Date().toISOString(),
-        };
-        onSave(newFarm);
-        e.currentTarget.reset();
-    };
-    return (
-        <Card>
-            <h2 className="text-lg font-semibold">Register farm / batch</h2>
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Farm name"><Input name="farm-name" placeholder="Example: Sundar Aquaculture" required /></FormField>
-                    <FormField label="Owner / contact"><Input name="farm-owner" placeholder="Phone / name" /></FormField>
-                </div>
-                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px]">
-                    <FormField label="Species">
-                        <Select name="farm-species" defaultValue="shrimp"><option value="shrimp">Shrimp</option><option value="tilapia">Tilapia</option><option value="carp">Carp</option><option value="pangasius">Pangasius</option></Select>
-                    </FormField>
-                    <FormField label="Number stocked"><Input name="farm-number" type="number" min="1" defaultValue="1000" required /></FormField>
-                </div>
-                <div className="flex gap-2 pt-2"><Button type="submit">Save farm</Button><Button variant="secondary">Cancel</Button></div>
-            </form>
-        </Card>
-    );
-};
-
-const TreatmentForm = ({ farms, onSave }: { farms: Farm[], onSave: (tx: Treatment) => void }) => {
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const newTx: Treatment = {
-            id: `tx-${Date.now()}`,
-            farmId: formData.get('tx-farm') as string,
-            date: formData.get('tx-date') as string || new Date().toISOString().slice(0, 10),
-            product: formData.get('tx-product') as string,
-            dose: parseFloat(formData.get('tx-dose') as string),
-            route: formData.get('tx-route') as Treatment['route'],
-            duration: parseInt(formData.get('tx-duration') as string, 10),
-            indication: formData.get('tx-indication') as string,
-        };
-        if (!newTx.farmId) { alert("Please select a farm."); return; }
-        onSave(newTx);
-        e.currentTarget.reset();
-    };
-    return (
-        <Card>
-            <h2 className="text-lg font-semibold">Record treatment</h2>
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Select farm / batch"><Select name="tx-farm" required><option value="">-- Select a Farm --</option>{farms.map(f => <option key={f.id} value={f.id}>{f.name} — {f.species}</option>)}</Select></FormField>
-                    <FormField label="Treatment date"><Input name="tx-date" type="date" defaultValue={new Date().toISOString().slice(0,10)} /></FormField>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><FormField label="Product (brand)"><Input name="tx-product" placeholder="e.g., Oxytetracycline 10%" required /></FormField><FormField label="Active ingredient (mg/kg)"><Input name="tx-dose" type="number" step="0.1" placeholder="mg/kg" required /></FormField></div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><FormField label="Route"><Select name="tx-route" defaultValue="feed"><option value="feed">Feed</option><option value="bath">Bath/Water</option><option value="injection">Injection</option></Select></FormField><FormField label="Duration (days)"><Input name="tx-duration" type="number" min="1" defaultValue="3" required /></FormField></div>
-                <FormField label="Indication / reason"><Input name="tx-indication" placeholder="e.g., bacterial gill disease" /></FormField>
-                <div className="flex gap-2 pt-2"><Button type="submit">Save treatment</Button><Button variant="success">Check withdrawal</Button></div>
-            </form>
-        </Card>
-    );
-}
-
-const PrescriptionForm = ({ treatments, onSave }: { treatments: Treatment[], onSave: (p: Prescription) => void }) => {
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const newPrescription: Prescription = {
-            id: `presc-${Date.now()}`,
-            vet: formData.get('vet-name') as string,
-            reg: formData.get('vet-reg') as string,
-            txId: formData.get('presc-tx') as string,
-            issued: new Date().toISOString(),
-        };
-        onSave(newPrescription);
-        e.currentTarget.reset();
-    }
-    return (
-        <Card>
-            <h2 className="text-lg font-semibold">Vet Prescription (simple)</h2>
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Vet name"><Input name="vet-name" placeholder="Dr. Lal" /></FormField>
-                    <FormField label="Registration no."><Input name="vet-reg" placeholder="REG-12345" /></FormField>
-                </div>
-                <FormField label="Attach to treatment"><Select name="presc-tx">{treatments.map(t => <option key={t.id} value={t.id}>{t.product} @ {t.date}</option>)}</Select></FormField>
-                <div className="flex gap-2 pt-2"><Button type="submit">Save prescription</Button></div>
-            </form>
-        </Card>
-    )
-}
-
-const LabForm = ({ treatments, onSave }: { treatments: Treatment[], onSave: (lab: LabResult) => void }) => {
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const newLabResult: LabResult = {
-            id: `lab-${Date.now()}`,
-            sample: formData.get('lab-sample') as string,
-            value: parseFloat(formData.get('lab-value') as string),
-            txId: formData.get('lab-tx') as string,
-            reported: new Date().toISOString(),
-        };
-        onSave(newLabResult);
-        e.currentTarget.reset();
-    }
-    return (
-        <Card>
-            <h2 className="text-lg font-semibold">Upload lab result</h2>
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Sample ID"><Input name="lab-sample" placeholder="SAMPLE-001" /></FormField>
-                    <FormField label="Analyze (mg/kg)"><Input name="lab-value" type="number" step="0.001" placeholder="e.g., 0.05" /></FormField>
-                </div>
-                <FormField label="Related treatment"><Select name="lab-tx">{treatments.map(t => <option key={t.id} value={t.id}>{t.product} @ {t.date}</option>)}</Select></FormField>
-                <div className="flex gap-2 pt-2"><Button type="submit">Save result</Button></div>
-            </form>
-        </Card>
-    );
-};
-
-const WithdrawalCalculator = () => {
-    const [result, setResult] = useState('-');
-    const compute = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const endDate = formData.get('wd-end') as string;
-        const days = parseInt(formData.get('wd-days') as string || '0', 10);
-        if (!endDate) { alert('Please enter a treatment end date.'); return; }
-        const d = new Date(endDate);
-        d.setDate(d.getDate() + days);
-        setResult(d.toISOString().slice(0, 10));
-    };
-    return (
-        <Card>
-            <h2 className="text-lg font-semibold">Withdrawal calculator</h2>
-            <p className="mt-1 text-sm text-muted">Enter treatment end date and withdrawal days to compute clearance date.</p>
-            <form onSubmit={compute} className="mt-4 space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Treatment end"><Input name="wd-end" type="date" required /></FormField>
-                    <FormField label="Withdrawal (days)"><Input name="wd-days" type="number" min="0" defaultValue="21" /></FormField>
-                </div>
-                <div className="flex items-center gap-4 pt-2">
-                    <Button type="submit">Compute clearance</Button>
-                    <div className="text-sm text-muted">Clearance date: <span className="font-semibold text-white">{result}</span></div>
-                </div>
-            </form>
-        </Card>
-    );
-};
