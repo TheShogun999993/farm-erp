@@ -1,0 +1,19 @@
+/* src/app/globals.css */
+@import "tailwindcss";
+
+/*
+  In Tailwind v4, you define your theme colors and other customizations
+  using native CSS variables inside the :root scope.
+*/
+@theme {
+  --color-background: #ffffff; /* White */
+  --color-foreground: #0f172a;   /* Dark Slate for text */
+
+  --color-primary: #3b82f6;      /* Blue */
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #facc15;    /* Yellow */
+  --color-secondary-foreground: #422006;
+  
+  --font-family-sans: "Inter", sans-serif; /* Example: setting a custom font */
+}
