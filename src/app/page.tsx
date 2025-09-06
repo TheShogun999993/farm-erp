@@ -12,7 +12,7 @@ import { differenceInDays, addDays, parseISO } from 'date-fns';
 interface Farm {
   id: string;
   name: string;
-  species: 'Shrimp' | 'Tilapia' | 'Carp' | 'Pangasius';
+  species: 'Shrimp' | 'Tilapia' | 'Carp' | 'Pangasus';
   location: string;
 }
 
