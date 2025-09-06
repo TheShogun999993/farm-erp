@@ -2,13 +2,6 @@
 'use client';
 
 import React, { useState, useEffect, FormEvent } from 'react';
-import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
-
-// Register the components Chart.js needs to draw a bar chart
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 // --- TYPE DEFINITIONS ---
 interface Farm {
@@ -159,7 +152,6 @@ const Navigation = ({ activeView, setActiveView }: { activeView: string; setActi
   );
 };
 
-
 // --- FORM & SECTION COMPONENTS ---
 const Dashboard = ({ farms, treatments, lastSync }: { farms: Farm[], treatments: Treatment[], lastSync: string }) => {
     const totalTx = treatments.length;
@@ -181,10 +173,6 @@ const Dashboard = ({ farms, treatments, lastSync }: { farms: Farm[], treatments:
                     <div className="flex items-center justify-between"><div className="text-sm">Avg mg active / kg biomass</div><div className="text-xl font-bold">{avgMg}</div></div>
                 </Card>
             </div>
-            <Card>
-                <h3 className="mb-2.5 font-semibold">AMU by drug class (sample)</h3>
-                <div className="h-[120px]"><AmuChart treatments={treatments} /></div>
-            </Card>
             <Card>
                 <h3 className="mb-2.5 font-semibold">Recent Treatments</h3>
                 {recentTreatments.length > 0 ? (
@@ -360,27 +348,4 @@ const WithdrawalCalculator = () => {
             </form>
         </Card>
     );
-};
-
-// --- CHART COMPONENT ---
-const AmuChart = ({ treatments }: { treatments: Treatment[] }) => {
-  const options = {
-    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: { y: { ticks: { color: '#9aa4b2' } }, x: { ticks: { color: '#9aa4b2' } } },
-  };
-  const productGroups = treatments.reduce((acc, tx) => {
-    const key = tx.product || 'Unknown';
-    acc[key] = (acc[key] || 0) + (tx.dose || 0);
-    return acc;
-  }, {} as Record<string, number>);
-
-  const data = {
-    labels: Object.keys(productGroups),
-    datasets: [{
-        label: 'Total Dose (mg)',
-        data: Object.values(productGroups),
-        backgroundColor: 'rgba(0, 163, 255, 0.7)',
-    }],
-  };
-  return <Bar options={options} data={data} />;
 };
