@@ -10,7 +10,7 @@ interface Farm {
   id: string;
   name: string;
   owner: string;
-  species: 'shrimp' | 'tilapia' | 'carp' | 'pangasius';
+  species: 'shrimp' | 'tilapia' | 'carp' | 'cod';
   number: number;
 }
 interface Treatment {
