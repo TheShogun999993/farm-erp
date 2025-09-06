@@ -2,7 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { Chart as ChartJS, ChartData, ChartOptions } from 'chart.js';
+// FIX 1: Import the main 'Chart' class type directly. Unused types are removed.
+import type { Chart as ChartJS } from 'chart.js';
 
 // --- TYPE DEFINITIONS ---
 interface Farm {
@@ -319,22 +320,27 @@ const AmuChart = ({ treatments }: { treatments: Treatment[] }) => {
         const labels = Object.keys(productGroups);
         const data = Object.values(productGroups);
 
-        // Destroy previous chart instance if it exists
         if (chartInstanceRef.current) {
             chartInstanceRef.current.destroy();
         }
 
-        // Create new chart instance
         const ctx = chartRef.current.getContext('2d');
         if (ctx) {
-            chartInstanceRef.current = new (window as any).Chart(ctx, {
+            // FIX 2: Check if window.Chart exists and cast it to a more specific type.
+            const Chart = (window as { Chart?: typeof ChartJS }).Chart;
+            if (!Chart) {
+                console.error("Chart.js is not loaded");
+                return;
+            }
+
+            chartInstanceRef.current = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels,
                     datasets: [{
                         label: 'Total Dose (mg)',
                         data,
-                        backgroundColor: 'rgba(0,163,255,0.7)',
+                        backgroundColor: 'rgba(0,163,25f5,0.7)',
                         borderColor: 'rgba(0,163,255,1)',
                         borderWidth: 1
                     }]
@@ -352,7 +358,6 @@ const AmuChart = ({ treatments }: { treatments: Treatment[] }) => {
         }
     }
 
-    // Cleanup function to destroy chart on component unmount
     return () => {
         if (chartInstanceRef.current) {
             chartInstanceRef.current.destroy();
